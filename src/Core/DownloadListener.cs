@@ -36,7 +36,7 @@ namespace BitCoinSharp
     {
         private int _originalBlocksLeft = -1;
         private int _lastPercent;
-        private readonly Semaphore _done = new Semaphore(0, 0);
+        private readonly Semaphore _done = new Semaphore(0, 1);
 
         public override void OnChainDownloadStarted(Peer peer, int blocksLeft)
         {
