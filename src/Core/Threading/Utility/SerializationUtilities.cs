@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
 
@@ -19,9 +20,9 @@ namespace BitCoinSharp.Threading.Utility
         {
             var thisType = instance.GetType();
             var mi = FormatterServices.GetSerializableMembers(thisType, context);
-            for (var i = 0; i < mi.Length; i++)
+            foreach (var t in mi)
             {
-                info.AddValue(mi[i].Name, ((FieldInfo) mi[i]).GetValue(instance));
+                info.AddValue(t.Name, ((FieldInfo) t).GetValue(instance));
             }
         }
 
@@ -35,9 +36,9 @@ namespace BitCoinSharp.Threading.Utility
         {
             var thisType = instance.GetType();
             var mi = FormatterServices.GetSerializableMembers(thisType, context);
-            for (var i = 0; i < mi.Length; i++)
+
+            foreach (var fi in mi.Cast<FieldInfo>())
             {
-                var fi = (FieldInfo) mi[i];
                 fi.SetValue(instance, info.GetValue(fi.Name, fi.FieldType));
             }
         }

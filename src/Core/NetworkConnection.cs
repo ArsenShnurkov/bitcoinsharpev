@@ -41,7 +41,7 @@ namespace BitCoinSharp
         private Stream _in;
         // The IP address to which we are connecting.
         private readonly IPAddress _remoteIp;
-        private readonly NetworkParameters _params;
+        private readonly NetworkParameters _networkParams;
         private readonly VersionMessage _versionMessage;
 
         private readonly BitcoinSerializer _serializer;
@@ -55,17 +55,17 @@ namespace BitCoinSharp
         /// is complete a functioning network channel is set up and running.
         /// </summary>
         /// <param name="peerAddress">IP address to connect to. IPv6 is not currently supported by BitCoin. If port is not positive the default port from params is used.</param>
-        /// <param name="params">Defines which network to connect to and details of the protocol.</param>
+        /// <param name="networkParams">Defines which network to connect to and details of the protocol.</param>
         /// <param name="bestHeight">How many blocks are in our best chain</param>
         /// <param name="connectTimeout">Timeout in milliseconds when initially connecting to peer</param>
         /// <exception cref="IOException">If there is a network related failure.</exception>
         /// <exception cref="ProtocolException">If the version negotiation failed.</exception>
-        public NetworkConnection(PeerAddress peerAddress, NetworkParameters @params, uint bestHeight, int connectTimeout)
+        public NetworkConnection(PeerAddress peerAddress, NetworkParameters networkParams, uint bestHeight, int connectTimeout)
         {
-            _params = @params;
+            _networkParams = networkParams;
             _remoteIp = peerAddress.Addr;
 
-            var port = (peerAddress.Port > 0) ? peerAddress.Port : @params.Port;
+            var port = (peerAddress.Port > 0) ? peerAddress.Port : networkParams.Port;
 
             var address = new IPEndPoint(_remoteIp, port);
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
@@ -76,11 +76,11 @@ namespace BitCoinSharp
             _in = new NetworkStream(_socket, FileAccess.Read);
 
             // the version message never uses check-summing. Update check-summing property after version is read.
-            _serializer = new BitcoinSerializer(@params, false);
+            _serializer = new BitcoinSerializer(networkParams, false);
 
             // Announce ourselves. This has to come first to connect to clients beyond v0.30.20.2 which wait to hear
             // from us until they send their version message back.
-            WriteMessage(new VersionMessage(@params, bestHeight));
+            WriteMessage(new VersionMessage(networkParams, bestHeight));
             // When connecting, the remote peer sends us a version message with various bits of
             // useful data in it. We need to know the peer protocol version before we can talk to it.
             _versionMessage = (VersionMessage) ReadMessage();
@@ -120,8 +120,8 @@ namespace BitCoinSharp
 
         /// <exception cref="IOException"/>
         /// <exception cref="ProtocolException"/>
-        public NetworkConnection(IPAddress inetAddress, NetworkParameters @params, uint bestHeight, int connectTimeout)
-            : this(new PeerAddress(inetAddress), @params, bestHeight, connectTimeout)
+        public NetworkConnection(IPAddress inetAddress, NetworkParameters networkParams, uint bestHeight, int connectTimeout)
+            : this(new PeerAddress(inetAddress), networkParams, bestHeight, connectTimeout)
         {
         }
 
@@ -147,7 +147,7 @@ namespace BitCoinSharp
 
         public override string ToString()
         {
-            return "[" + _remoteIp + "]:" + _params.Port + " (" + (_socket.Connected ? "connected" : "disconnected") + ")";
+            return "[" + _remoteIp + "]:" + _networkParams.Port + " (" + (_socket.Connected ? "connected" : "disconnected") + ")";
         }
 
         /// <summary>
@@ -187,20 +187,28 @@ namespace BitCoinSharp
 
         public void Dispose()
         {
-            if (_in != null)
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private bool _isDisposed;
+        protected virtual void Dispose(bool isDisposing)
+        {
+            if (!_isDisposed)
             {
-                _in.Dispose();
+                if (_in != null)
+                    _in.Dispose();
                 _in = null;
-            }
-            if (_out != null)
-            {
-                _out.Dispose();
+
+                if (_out != null)
+                    _out.Dispose();
                 _out = null;
-            }
-            if (_socket != null)
-            {
-                ((IDisposable) _socket).Dispose();
+
+                if (_socket != null)
+                    _socket.Close();
                 _socket = null;
+
+                _isDisposed = true;
             }
         }
 

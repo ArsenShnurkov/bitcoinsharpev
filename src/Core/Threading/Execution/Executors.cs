@@ -358,11 +358,7 @@ namespace BitCoinSharp.Threading.Execution
         public static Func<T> CreateCall<T>(Action action, T result)
         {
             if (action == null) throw new ArgumentNullException("action");
-            return delegate
-                   {
-                       action();
-                       return result;
-                   };
+            return delegate { action(); return result; };
         }
 
         /// <summary>
@@ -397,25 +393,24 @@ namespace BitCoinSharp.Threading.Execution
 
         internal class DefaultThreadFactory : IThreadFactory
         {
-            internal static readonly AtomicInteger poolNumber = new AtomicInteger(1);
-            internal readonly AtomicInteger threadNumber = new AtomicInteger(1);
-            internal readonly String namePrefix;
+            internal static readonly AtomicInteger PoolNumber = new AtomicInteger(1);
+            internal readonly AtomicInteger ThreadNumber = new AtomicInteger(1);
+            internal readonly String NamePrefix;
 
             internal DefaultThreadFactory()
             {
-                namePrefix = "pool-" + poolNumber.ReturnValueAndIncrement() + "-thread-";
+                NamePrefix = "pool-" + PoolNumber.ReturnValueAndIncrement() + "-thread-";
             }
 
             public virtual Thread NewThread(IRunnable r)
             {
-                var t = new Thread(r.Run);
-                t.Name = namePrefix + threadNumber.ReturnValueAndIncrement();
+                var t = new Thread(r.Run) {Name = NamePrefix + ThreadNumber.ReturnValueAndIncrement()};
                 if (t.IsBackground)
                     t.IsBackground = false;
+                // ReSharper disable RedundantCheckBeforeAssignment
                 if (t.Priority != ThreadPriority.Normal)
-                {
+                // ReSharper restore RedundantCheckBeforeAssignment
                     t.Priority = ThreadPriority.Normal;
-                }
                 return t;
             }
         }
@@ -449,9 +444,20 @@ namespace BitCoinSharp.Threading.Execution
                 _executorService.Execute(action);
             }
 
-            public virtual void Dispose()
+            public void Dispose()
             {
-                _executorService.Dispose();
+                Dispose(true);
+                GC.SuppressFinalize(this);
+            }
+
+            private bool _isDisposed;
+            public virtual void Dispose(bool isDisposing)
+            {
+                if (!_isDisposed)
+                {
+                    _executorService.Dispose();
+                    _isDisposed = true;
+                }
             }
 
             public virtual void Shutdown()

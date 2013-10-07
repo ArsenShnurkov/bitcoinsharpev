@@ -101,10 +101,7 @@ namespace BitCoinSharp.Collections.Generic
             {
                 return element;
             }
-            else
-            {
-                throw new InvalidOperationException("Queue is empty.");
-            }
+            throw new InvalidOperationException("Queue is empty.");
         }
 
         /// <summary>

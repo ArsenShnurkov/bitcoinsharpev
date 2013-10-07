@@ -35,7 +35,7 @@ namespace BitCoinSharp.Collections.Generic
     /// </summary>
     /// <typeparam name="T">Type of the elements to be iterated.</typeparam>
     /// <author>Kenneth Xu</author>
-    internal abstract class AbstractEnumerator<T> : IEnumerator<T>, IEnumerable<T> //NET_ONLY
+    internal abstract class AbstractEnumerator<T> : IEnumerator<T>, IEnumerable<T>
     {
         /// <summary>
         /// Indicates if the enumerator has not started, is in progress, 
@@ -102,12 +102,18 @@ namespace BitCoinSharp.Collections.Generic
             get { return (_state == EnumeratorState.InProgress) ? FetchCurrent() : default(T); }
         }
 
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
         /// <summary>
         /// Performs application-defined tasks associated with freeing, releasing, 
         /// or resetting unmanaged resources. This implementation does nothing.
         /// </summary>
         /// <filterpriority>2</filterpriority>
-        public virtual void Dispose()
+        public virtual void Dispose(bool isDisposing)
         {
         }
 

@@ -569,10 +569,9 @@ namespace BitCoinSharp
                 var tx = CreateSend(to, nanocoins);
                 if (tx == null) // Not enough money! :-(
                     return null;
+
                 if (!peerGroup.BroadcastTransaction(tx))
-                {
                     throw new IOException("Failed to broadcast tx to all connected peers");
-                }
 
                 // TODO - retry logic
                 ConfirmSend(tx);
@@ -633,10 +632,10 @@ namespace BitCoinSharp
                 var gathered = new LinkedList<TransactionOutput>();
                 foreach (var tx in Unspent.Values)
                 {
-                    foreach (var output in tx.Outputs)
+                    foreach (var output in tx.Outputs
+                        .Where(output => output.IsAvailableForSpending)
+                        .Where(output => output.IsMine(this)))
                     {
-                        if (!output.IsAvailableForSpending) continue;
-                        if (!output.IsMine(this)) continue;
                         gathered.AddLast(output);
                         valueGathered += output.Value;
                     }
@@ -662,10 +661,9 @@ namespace BitCoinSharp
                     _log.Info("  with " + Utils.BitcoinValueToFriendlyString((ulong) change) + " coins change");
                     sendTx.AddOutput(new TransactionOutput(_params, sendTx, (ulong) change, changeAddress));
                 }
+
                 foreach (var output in gathered)
-                {
                     sendTx.AddInput(output);
-                }
 
                 // Now sign the inputs, thus proving that we are entitled to redeem the connected outputs.
                 sendTx.SignInputs(Transaction.SigHash.All, this);
@@ -695,11 +693,7 @@ namespace BitCoinSharp
         {
             lock (this)
             {
-                foreach (var key in Keychain)
-                {
-                    if (key.PubKeyHash.SequenceEqual(pubkeyHash)) return key;
-                }
-                return null;
+                return Keychain.FirstOrDefault(key => key.PubKeyHash.SequenceEqual(pubkeyHash));
             }
         }
 
@@ -722,11 +716,7 @@ namespace BitCoinSharp
         {
             lock (this)
             {
-                foreach (var key in Keychain)
-                {
-                    if (key.PubKey.SequenceEqual(pubkey)) return key;
-                }
-                return null;
+                return Keychain.FirstOrDefault(key => key.PubKey.SequenceEqual(pubkey));
             }
         }
 
@@ -790,30 +780,17 @@ namespace BitCoinSharp
         {
             lock (this)
             {
-                var available = 0UL;
-                foreach (var tx in Unspent.Values)
-                {
-                    foreach (var output in tx.Outputs)
-                    {
-                        if (!output.IsMine(this)) continue;
-                        if (!output.IsAvailableForSpending) continue;
-                        available += output.Value;
-                    }
-                }
+                var available = Unspent.Values.Aggregate(0UL, (current1, tx) => tx.Outputs
+                    .Where(output => output.IsMine(this))
+                    .Where(output => output.IsAvailableForSpending)
+                    .Aggregate(current1, (current, output) => current + output.Value));
                 if (balanceType == BalanceType.Available)
                     return available;
                 Debug.Assert(balanceType == BalanceType.Estimated);
                 // Now add back all the pending outputs to assume the transaction goes through.
-                var estimated = available;
-                foreach (var tx in Pending.Values)
-                {
-                    foreach (var output in tx.Outputs)
-                    {
-                        if (!output.IsMine(this)) continue;
-                        estimated += output.Value;
-                    }
-                }
-                return estimated;
+                return Pending.Values
+                    .Aggregate(available, (current1, tx) => tx.Outputs.Where(output => output.IsMine(this))
+                    .Aggregate(current1, (current, output) => current + output.Value));
             }
         }
 
@@ -835,7 +812,7 @@ namespace BitCoinSharp
                     builder.Append("  addr:");
                     builder.Append(key.ToAddress(_params));
                     builder.Append(" ");
-                    builder.Append(key.ToString());
+                    builder.Append(key);
                     builder.AppendLine();
                 }
                 // Print the transactions themselves
@@ -907,9 +884,8 @@ namespace BitCoinSharp
 
                 IDictionary<Sha256Hash, Transaction> all = new Dictionary<Sha256Hash, Transaction>();
                 foreach (var pair in Unspent.Concat(Spent).Concat(_inactive))
-                {
                     all[pair.Key] = pair.Value;
-                }
+
                 foreach (var tx in all.Values)
                 {
                     var appearsIn = tx.AppearsIn;
@@ -983,11 +959,8 @@ namespace BitCoinSharp
                 _inactive.Clear();
                 foreach (var tx in commonChainTransactions.Values)
                 {
-                    var unspentOutputs = 0;
-                    foreach (var output in tx.Outputs)
-                    {
-                        if (output.IsAvailableForSpending) unspentOutputs++;
-                    }
+                    var unspentOutputs = tx.Outputs.Count(output => output.IsAvailableForSpending);
+
                     if (unspentOutputs > 0)
                     {
                         _log.InfoFormat("  TX {0}: ->unspent", tx.HashAsString);
@@ -1006,18 +979,16 @@ namespace BitCoinSharp
                 {
                     _log.InfoFormat("Replaying block {0}", b.Header.HashAsString);
                     ICollection<Transaction> txns = new HashSet<Transaction>();
-                    foreach (var tx in newChainTransactions.Values)
+
+                    var b1 = b;
+                    foreach (var tx in newChainTransactions.Values.Where(tx => tx.AppearsIn.Contains(b1)))
                     {
-                        if (tx.AppearsIn.Contains(b))
-                        {
-                            txns.Add(tx);
-                            _log.InfoFormat("  containing tx {0}", tx.HashAsString);
-                        }
+                        txns.Add(tx);
+                        _log.InfoFormat("  containing tx {0}", tx.HashAsString);
                     }
+
                     foreach (var t in txns)
-                    {
                         Receive(t, b, BlockChain.NewBlockType.BestChain, true);
-                    }
                 }
 
                 // Find the transactions that didn't make it into the new chain yet. For each input, try to connect it to the
@@ -1028,14 +999,12 @@ namespace BitCoinSharp
                 // network heals itself.
                 IDictionary<Sha256Hash, Transaction> pool = new Dictionary<Sha256Hash, Transaction>();
                 foreach (var pair in Unspent.Concat(Spent).Concat(Pending))
-                {
                     pool[pair.Key] = pair.Value;
-                }
+
                 IDictionary<Sha256Hash, Transaction> toReprocess = new Dictionary<Sha256Hash, Transaction>();
                 foreach (var pair in onlyOldChainTransactions.Concat(Pending))
-                {
                     toReprocess[pair.Key] = pair.Value;
-                }
+
                 _log.Info("Reprocessing:");
                 // Note, we must reprocess dead transactions first. The reason is that if there is a double spend across
                 // chains from our own coins we get a complicated situation:
@@ -1048,13 +1017,10 @@ namespace BitCoinSharp
                 //
                 // This only occurs when we are double spending our own coins.
                 foreach (var tx in _dead.Values.ToList())
-                {
                     ReprocessTxAfterReorg(pool, tx);
-                }
+
                 foreach (var tx in toReprocess.Values)
-                {
                     ReprocessTxAfterReorg(pool, tx);
-                }
 
                 _log.InfoFormat("post-reorg balance is {0}", Utils.BitcoinValueToFriendlyString(GetBalance()));
 
@@ -1088,13 +1054,9 @@ namespace BitCoinSharp
                 }
                 var result = input.Connect(pool, false);
                 if (result == TransactionInput.ConnectionResult.Success)
-                {
                     success++;
-                }
                 else if (result == TransactionInput.ConnectionResult.NoSuchTx)
-                {
                     noSuchTx++;
-                }
                 else if (result == TransactionInput.ConnectionResult.AlreadySpent)
                 {
                     isDead = true;
@@ -1138,71 +1100,6 @@ namespace BitCoinSharp
         public ICollection<Transaction> PendingTransactions
         {
             get { return Pending.Values; }
-        }
-    }
-
-    /// <summary>
-    /// This is called on a Peer thread when a block is received that sends some coins to you. Note that this will
-    /// also be called when downloading the block chain as the wallet balance catches up so if you don't want that
-    /// register the event listener after the chain is downloaded. It's safe to use methods of wallet during the
-    /// execution of this callback.
-    /// </summary>
-    public class WalletCoinsReceivedEventArgs : EventArgs
-    {
-        /// <summary>
-        /// The transaction which sent us the coins.
-        /// </summary>
-        public Transaction Tx { get; private set; }
-
-        /// <summary>
-        /// Balance before the coins were received.
-        /// </summary>
-        public ulong PrevBalance { get; private set; }
-
-        /// <summary>
-        /// Current balance of the wallet.
-        /// </summary>
-        public ulong NewBalance { get; private set; }
-
-        /// <param name="tx">The transaction which sent us the coins.</param>
-        /// <param name="prevBalance">Balance before the coins were received.</param>
-        /// <param name="newBalance">Current balance of the wallet.</param>
-        public WalletCoinsReceivedEventArgs(Transaction tx, ulong prevBalance, ulong newBalance)
-        {
-            Tx = tx;
-            PrevBalance = prevBalance;
-            NewBalance = newBalance;
-        }
-    }
-
-    /// <summary>
-    /// This is called on a Peer thread when a transaction becomes <i>dead</i>. A dead transaction is one that has
-    /// been overridden by a double spend from the network and so will never confirm no matter how long you wait.
-    /// </summary>
-    /// <remarks>
-    /// A dead transaction can occur if somebody is attacking the network, or by accident if keys are being shared.
-    /// You can use this event handler to inform the user of the situation. A dead spend will show up in the BitCoin
-    /// C++ client of the recipient as 0/unconfirmed forever, so if it was used to purchase something,
-    /// the user needs to know their goods will never arrive.
-    /// </remarks>
-    public class WalletDeadTransactionEventArgs : EventArgs
-    {
-        /// <summary>
-        /// The transaction that is newly dead.
-        /// </summary>
-        public Transaction DeadTx { get; private set; }
-
-        /// <summary>
-        /// The transaction that killed it.
-        /// </summary>
-        public Transaction ReplacementTx { get; private set; }
-
-        /// <param name="deadTx">The transaction that is newly dead.</param>
-        /// <param name="replacementTx">The transaction that killed it.</param>
-        public WalletDeadTransactionEventArgs(Transaction deadTx, Transaction replacementTx)
-        {
-            DeadTx = deadTx;
-            ReplacementTx = replacementTx;
         }
     }
 }

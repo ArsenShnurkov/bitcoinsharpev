@@ -135,7 +135,6 @@ namespace BitCoinSharp.Threading.Helpers
                         }
                         // thread was interrupted after it was notified
                         Thread.CurrentThread.Interrupt();
-                        return;
                     }
                 }
             }

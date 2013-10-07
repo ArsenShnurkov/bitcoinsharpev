@@ -15,6 +15,7 @@
  */
 
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using BitCoinSharp.Collections.Generic;
 using BitCoinSharp.IO;
@@ -66,7 +67,6 @@ namespace BitCoinSharp.Store
             private const int _chainWorkBytes = 16;
             private static readonly byte[] _emptyBytes = new byte[_chainWorkBytes];
 
-            private uint _height; // 4 bytes
             private readonly byte[] _chainWork; // 16 bytes
             private readonly byte[] _blockHeader; // 80 bytes
 
@@ -74,7 +74,7 @@ namespace BitCoinSharp.Store
 
             public Record()
             {
-                _height = 0;
+                Height = 0;
                 _chainWork = new byte[_chainWorkBytes];
                 _blockHeader = new byte[Block.HeaderSize];
             }
@@ -115,13 +115,13 @@ namespace BitCoinSharp.Store
                 if (bytesRead < Size)
                     return false;
                 buffer.Position = 0;
-                _height = (uint) buffer.GetInt();
+                Height = (uint) buffer.GetInt();
                 buffer.Get(_chainWork);
                 buffer.Get(_blockHeader);
                 return true;
             }
 
-            public BigInteger ChainWork
+            private BigInteger ChainWork
             {
                 get { return new BigInteger(1, _chainWork); }
             }
@@ -132,10 +132,7 @@ namespace BitCoinSharp.Store
                 return new Block(@params, _blockHeader);
             }
 
-            public uint Height
-            {
-                get { return _height; }
-            }
+            private uint Height { get; set; }
 
             /// <exception cref="ProtocolException"/>
             public StoredBlock ToStoredBlock(NetworkParameters @params)
@@ -279,13 +276,10 @@ namespace BitCoinSharp.Store
                 // Check the memory cache first.
                 StoredBlock fromMem;
                 if (_blockCache.TryGetValue(hash, out fromMem))
-                {
                     return fromMem;
-                }
-                if (_notFoundCache.TryGetValue(hash, out fromMem) && fromMem == _notFoundMarker)
-                {
+
+                if (_notFoundCache.TryGetValue(hash, out fromMem) && (fromMem == _notFoundMarker))
                     return null;
-                }
 
                 try
                 {
@@ -295,18 +289,14 @@ namespace BitCoinSharp.Store
                     {
                         _notFoundCache[hash] = _notFoundMarker;
                         while (_notFoundCache.Count > 2050)
-                        {
                             _notFoundCache.RemoveAt(0);
-                        }
                     }
                     else
                     {
                         block = fromDisk.ToStoredBlock(_params);
                         _blockCache[hash] = block;
                         while (_blockCache.Count > 2050)
-                        {
                             _blockCache.RemoveAt(0);
-                        }
                     }
                     return block;
                 }
@@ -344,15 +334,13 @@ namespace BitCoinSharp.Store
                 }
                 // Did not find it.
                 if (pos == 1 + 32)
-                {
                     // At the start so wrap around to the end.
                     pos = _channel.Length - Record.Size;
-                }
                 else
                 {
                     // Move backwards.
                     pos = pos - Record.Size;
-                    Debug.Assert(pos >= 1 + 32, pos.ToString());
+                    Debug.Assert(pos >= 1 + 32, pos.ToString(CultureInfo.InvariantCulture));
                 }
             } while (pos != startPos);
             // Was never stored.

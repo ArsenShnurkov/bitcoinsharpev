@@ -260,22 +260,18 @@ namespace BitCoinSharp.Threading
             {
                 if (_count <= 0)
                     return true;
-                else if (duration.Ticks <= 0)
+                if (duration.Ticks <= 0)
                     return false;
-                else
+                
+                for (;;)
                 {
-                    for (;;)
-                    {
-                        Monitor.Wait(this, duration);
-                        if (_count <= 0)
-                            return true;
-                        else
-                        {
-                            duration = deadline.Subtract(DateTime.UtcNow);
-                            if (duration.Ticks <= 0)
-                                return false;
-                        }
-                    }
+                    Monitor.Wait(this, duration);
+                    if (_count <= 0)
+                        return true;
+                    
+                    duration = deadline.Subtract(DateTime.UtcNow);
+                    if (duration.Ticks <= 0)
+                        return false;
                 }
             }
         }

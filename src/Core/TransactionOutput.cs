@@ -53,15 +53,15 @@ namespace BitCoinSharp
         /// Deserializes a transaction output message. This is usually part of a transaction message.
         /// </summary>
         /// <exception cref="ProtocolException"/>
-        public TransactionOutput(NetworkParameters @params, Transaction parent, byte[] payload, int offset)
-            : base(@params, payload, offset)
+        public TransactionOutput(NetworkParameters networkParams, Transaction parent, byte[] payload, int offset)
+            : base(networkParams, payload, offset)
         {
             ParentTransaction = parent;
             _availableForSpending = true;
         }
 
-        internal TransactionOutput(NetworkParameters @params, Transaction parent, ulong value, Address to)
-            : base(@params)
+        internal TransactionOutput(NetworkParameters networkParams, Transaction parent, ulong value, Address to)
+            : base(networkParams)
         {
             _value = value;
             _scriptBytes = Script.CreateOutputScript(to);
@@ -72,8 +72,8 @@ namespace BitCoinSharp
         /// <summary>
         /// Used only in creation of the genesis blocks and in unit tests.
         /// </summary>
-        internal TransactionOutput(NetworkParameters @params, Transaction parent, byte[] scriptBytes)
-            : base(@params)
+        internal TransactionOutput(NetworkParameters networkParams, Transaction parent, byte[] scriptBytes)
+            : base(networkParams)
         {
             _scriptBytes = scriptBytes;
             _value = Utils.ToNanoCoins(50, 0);

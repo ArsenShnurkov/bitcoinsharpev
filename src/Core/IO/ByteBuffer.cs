@@ -57,8 +57,7 @@ namespace BitCoinSharp.IO
         public static ByteBuffer Allocate(int capacity)
         {
             var ms = new MemoryStream(capacity);
-            var buffer = new ByteBuffer(ms);
-            buffer.Limit = capacity;
+            var buffer = new ByteBuffer(ms) {Limit = capacity};
             return buffer;
         }
 
@@ -75,8 +74,7 @@ namespace BitCoinSharp.IO
         /// <returns></returns>
         public static ByteBuffer Wrap(byte[] array, int offset, int length)
         {
-            var ms = new MemoryStream(array, offset, length, true, true);
-            ms.Capacity = array.Length;
+            var ms = new MemoryStream(array, offset, length, true, true) {Capacity = array.Length};
             ms.SetLength(offset + length);
             ms.Position = offset;
             return new ByteBuffer(ms);

@@ -23,6 +23,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 #endregion
@@ -98,11 +99,7 @@ namespace BitCoinSharp.Collections.Generic
         /// </param>
         public virtual bool Contains(T item)
         {
-            foreach (var t in this)
-            {
-                if (Equals(t, item)) return true;
-            }
-            return false;
+            return Enumerable.Contains(this, item);
         }
 
         /// <summary> 

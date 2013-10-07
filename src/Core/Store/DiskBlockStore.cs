@@ -34,40 +34,38 @@ namespace BitCoinSharp.Store
         private FileStream _stream;
         private readonly IDictionary<Sha256Hash, StoredBlock> _blockMap;
         private Sha256Hash _chainHead;
-        private readonly NetworkParameters _params;
+        private readonly NetworkParameters _networkParams;
 
         /// <exception cref="BlockStoreException"/>
-        public DiskBlockStore(NetworkParameters @params, FileInfo file)
+        public DiskBlockStore(NetworkParameters networkParams, FileInfo file)
         {
-            _params = @params;
+            _networkParams = networkParams;
             _blockMap = new Dictionary<Sha256Hash, StoredBlock>();
             try
             {
                 Load(file);
                 if (_stream != null)
-                {
                     _stream.Dispose();
-                }
+
                 _stream = file.Open(FileMode.Append, FileAccess.Write); // Do append.
             }
             catch (IOException e)
             {
                 _log.Error("failed to load block store from file", e);
-                CreateNewStore(@params, file);
+                CreateNewStore(networkParams, file);
             }
         }
 
         /// <exception cref="BlockStoreException"/>
-        private void CreateNewStore(NetworkParameters @params, FileInfo file)
+        private void CreateNewStore(NetworkParameters networkParams, FileInfo file)
         {
             // Create a new block store if the file wasn't found or anything went wrong whilst reading.
             _blockMap.Clear();
             try
             {
                 if (_stream != null)
-                {
                     _stream.Dispose();
-                }
+
                 _stream = file.OpenWrite(); // Do not append, create fresh.
                 _stream.Write(1); // Version.
             }
@@ -79,7 +77,7 @@ namespace BitCoinSharp.Store
             try
             {
                 // Set up the genesis block. When we start out fresh, it is by definition the top of the chain.
-                var genesis = @params.GenesisBlock.CloneAsHeader();
+                var genesis = networkParams.GenesisBlock.CloneAsHeader();
                 var storedGenesis = new StoredBlock(genesis, genesis.GetWork(), 0);
                 _chainHead = storedGenesis.Header.Hash;
                 _stream.Write(_chainHead.Bytes);
@@ -100,15 +98,13 @@ namespace BitCoinSharp.Store
             {
                 // Read a version byte.
                 var version = input.Read();
+
                 if (version == -1)
-                {
                     // No such file or the file was empty.
                     throw new FileNotFoundException(file.Name + " does not exist or is empty");
-                }
                 if (version != 1)
-                {
                     throw new BlockStoreException("Bad version number: " + version);
-                }
+
                 // Chain head pointer is the first thing in the file.
                 var chainHeadHash = new byte[32];
                 if (input.Read(chainHeadHash) < chainHeadHash.Length)
@@ -129,21 +125,17 @@ namespace BitCoinSharp.Store
                             break;
                         }
                         // Parse it.
-                        var b = new Block(_params, headerBytes);
+                        var b = new Block(_networkParams, headerBytes);
                         // Look up the previous block it connects to.
                         var prev = Get(b.PrevBlockHash);
                         StoredBlock s;
                         if (prev == null)
                         {
                             // First block in the stored chain has to be treated specially.
-                            if (b.Equals(_params.GenesisBlock))
-                            {
-                                s = new StoredBlock(_params.GenesisBlock.CloneAsHeader(), _params.GenesisBlock.GetWork(), 0);
-                            }
+                            if (b.Equals(_networkParams.GenesisBlock))
+                                s = new StoredBlock(_networkParams.GenesisBlock.CloneAsHeader(), _networkParams.GenesisBlock.GetWork(), 0);
                             else
-                            {
                                 throw new BlockStoreException("Could not connect " + b.Hash + " to " + b.PrevBlockHash);
-                            }
                         }
                         else
                         {
@@ -239,12 +231,21 @@ namespace BitCoinSharp.Store
 
         public void Dispose()
         {
-            if (_stream != null)
+            GC.SuppressFinalize(this);
+        }
+
+        private bool _isDisposed;
+        protected virtual void Dispose(bool isDisposing)
+        {
+            if (!_isDisposed)
             {
-                _stream.Dispose();
+                if (_stream != null)
+                    _stream.Dispose();
                 _stream = null;
+                _isDisposed = true;
             }
         }
+
 
         #endregion
     }

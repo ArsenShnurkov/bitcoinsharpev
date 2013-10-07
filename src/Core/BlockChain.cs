@@ -350,7 +350,7 @@ namespace BitCoinSharp
         }
 
         /// <exception cref="VerificationException"/>
-        private static void SendTransactionsToWallet(StoredBlock block, NewBlockType blockType, IDictionary<Wallet, List<Transaction>> newTransactions)
+        private static void SendTransactionsToWallet(StoredBlock block, NewBlockType blockType, IEnumerable<KeyValuePair<Wallet, List<Transaction>>> newTransactions)
         {
             foreach (var item in newTransactions)
             {

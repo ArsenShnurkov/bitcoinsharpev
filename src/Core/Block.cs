@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using BitCoinSharp.Common;
 using BitCoinSharp.IO;
@@ -39,14 +40,14 @@ namespace BitCoinSharp
     [Serializable]
     public class Block : Message
     {
-        private static readonly ILog _log = LogManager.GetLogger(typeof (Block));
+        private static readonly ILog Log = LogManager.GetLogger(typeof (Block));
 
         /// <summary>
         /// How many bytes are required to represent a block header.
         /// </summary>
         public const int HeaderSize = 80;
 
-        private const uint _allowedTimeDrift = 2*60*60; // Same value as official client.
+        private const uint AllowedTimeDrift = 2*60*60; // Same value as official client.
 
         /// <summary>
         /// A value for difficultyTarget (nBits) that allows half of all possible hash solutions. Used in unit testing.
@@ -77,8 +78,8 @@ namespace BitCoinSharp
         /// <summary>
         /// Special case constructor, used for the genesis node, cloneAsHeader and unit tests.
         /// </summary>
-        internal Block(NetworkParameters @params)
-            : base(@params)
+        internal Block(NetworkParameters networkParams)
+            : base(networkParams)
         {
             // Set up a few basic things. We are not complete after this though.
             _version = 1;
@@ -91,8 +92,8 @@ namespace BitCoinSharp
         /// Constructs a block object from the BitCoin wire format.
         /// </summary>
         /// <exception cref="ProtocolException"/>
-        public Block(NetworkParameters @params, byte[] payloadBytes)
-            : base(@params, payloadBytes, 0)
+        public Block(NetworkParameters networkParams, byte[] payloadBytes)
+            : base(networkParams, payloadBytes, 0)
         {
         }
 
@@ -108,19 +109,17 @@ namespace BitCoinSharp
 
             _hash = new Sha256Hash(Utils.ReverseBytes(Utils.DoubleDigest(Bytes, 0, Cursor)));
 
+            // Check if this is just a header, it has no transactions.
             if (Cursor == Bytes.Length)
             {
-                // This message is just a header, it has no transactions.
-                return;
-            }
-
-            var numTransactions = (int) ReadVarInt();
-            Transactions = new List<Transaction>(numTransactions);
-            for (var i = 0; i < numTransactions; i++)
-            {
-                var tx = new Transaction(Params, Bytes, Cursor);
-                Transactions.Add(tx);
-                Cursor += tx.MessageSize;
+                var numTransactions = (int)ReadVarInt();
+                Transactions = new List<Transaction>(numTransactions);
+                for (var i = 0; i < numTransactions; i++)
+                {
+                    var tx = new Transaction(Params, Bytes, Cursor);
+                    Transactions.Add(tx);
+                    Cursor += tx.MessageSize;
+                }
             }
         }
 
@@ -181,7 +180,7 @@ namespace BitCoinSharp
         /// <summary>
         /// The number that is one greater than the largest representable SHA-256 hash.
         /// </summary>
-        private static readonly BigInteger _largestHash = BigInteger.One.ShiftLeft(256);
+        private static readonly BigInteger LargestHash = BigInteger.One.ShiftLeft(256);
 
         /// <summary>
         /// Returns the work represented by this block.
@@ -195,7 +194,7 @@ namespace BitCoinSharp
         public BigInteger GetWork()
         {
             var target = GetDifficultyTargetAsInteger();
-            return _largestHash.Divide(target.Add(BigInteger.One));
+            return LargestHash.Divide(target.Add(BigInteger.One));
         }
 
         /// <summary>
@@ -203,15 +202,17 @@ namespace BitCoinSharp
         /// </summary>
         public Block CloneAsHeader()
         {
-            var block = new Block(Params);
-            block._nonce = _nonce;
-            block._prevBlockHash = _prevBlockHash.Duplicate();
-            block._merkleRoot = MerkleRoot.Duplicate();
-            block._version = _version;
-            block._time = _time;
-            block._difficultyTarget = _difficultyTarget;
-            block.Transactions = null;
-            block._hash = Hash.Duplicate();
+            var block = new Block(Params)
+                {
+                    _nonce = _nonce,
+                    _prevBlockHash = _prevBlockHash.Duplicate(),
+                    _merkleRoot = MerkleRoot.Duplicate(),
+                    _version = _version,
+                    _time = _time,
+                    _difficultyTarget = _difficultyTarget,
+                    Transactions = null,
+                    _hash = Hash.Duplicate()
+                };
             return block;
         }
 
@@ -232,9 +233,7 @@ namespace BitCoinSharp
             {
                 s.AppendFormat("   with {0} transaction(s):", Transactions.Count).AppendLine();
                 foreach (var tx in Transactions)
-                {
-                    s.Append(tx.ToString());
-                }
+                    s.Append(tx);
             }
             return s.ToString();
         }
@@ -252,7 +251,8 @@ namespace BitCoinSharp
             while (true)
             {
                 // Is our proof of work valid yet?
-                if (CheckProofOfWork(false)) return;
+                if (CheckProofOfWork(false)) 
+                    return;
                 // No, so increment the nonce and try again.
                 Nonce++;
             }
@@ -293,8 +293,7 @@ namespace BitCoinSharp
             {
                 // Proof of work check failed!
                 if (throwException)
-                    throw new VerificationException("Hash is higher than target: " + HashAsString + " vs " +
-                                                    target.ToString(16));
+                    throw new VerificationException("Hash is higher than target: " + HashAsString + " vs " + target.ToString(16));
                 return false;
             }
             return true;
@@ -305,7 +304,7 @@ namespace BitCoinSharp
         {
             // Allow injection of a fake clock to allow unit testing.
             var currentTime = FakeClock != 0 ? FakeClock : UnixTime.ToUnixTime(DateTime.UtcNow);
-            if (_time > currentTime + _allowedTimeDrift)
+            if (_time > currentTime + AllowedTimeDrift)
                 throw new VerificationException("Block too far in future");
         }
 
@@ -315,7 +314,7 @@ namespace BitCoinSharp
             var calculatedRoot = CalculateMerkleRoot();
             if (!calculatedRoot.Equals(_merkleRoot))
             {
-                _log.Error("Merkle tree did not verify");
+                Log.Error("Merkle tree did not verify");
                 throw new VerificationException("Merkle hashes do not match: " +
                                                 calculatedRoot + " vs " + _merkleRoot);
             }
@@ -359,12 +358,9 @@ namespace BitCoinSharp
             //          2     3     4
             //         / \   / \   /  \
             //       t1 t2  t3 t4  t5 t5
-            var tree = new List<byte[]>();
+            var tree = Transactions.Select(t => t.Hash.Bytes).ToList();
+
             // Start by adding all the hashes of the transactions as leaves of the tree.
-            foreach (var t in Transactions)
-            {
-                tree.Add(t.Hash.Bytes);
-            }
             var levelOffset = 0; // Offset in the list where the currently processed level starts.
             // Step through each level, stopping when we reach the root (levelSize == 1).
             for (var levelSize = Transactions.Count; levelSize > 1; levelSize = (levelSize + 1)/2)
@@ -473,9 +469,7 @@ namespace BitCoinSharp
         internal void AddTransaction(Transaction t)
         {
             if (Transactions == null)
-            {
                 Transactions = new List<Transaction>();
-            }
             Transactions.Add(t);
             // Force a recalculation next time the values are needed.
             _merkleRoot = null;
@@ -569,22 +563,21 @@ namespace BitCoinSharp
             Transactions.Add(coinbase);
         }
 
-        private static readonly byte[] _emptyBytes = new byte[32];
+        private static readonly byte[] EmptyBytes = new byte[32];
 
         /// <summary>
         /// Returns a solved block that builds on top of this one. This exists for unit tests.
         /// </summary>
         internal Block CreateNextBlock(Address to, uint time)
         {
-            var b = new Block(Params);
-            b.DifficultyTarget = _difficultyTarget;
-            b.AddCoinbaseTransaction(_emptyBytes);
+            var b = new Block(Params) {DifficultyTarget = _difficultyTarget};
+            b.AddCoinbaseTransaction(EmptyBytes);
 
             // Add a transaction paying 50 coins to the "to" address.
             var t = new Transaction(Params);
             t.AddOutput(new TransactionOutput(Params, t, Utils.ToNanoCoins(50, 0), to));
             // The input does not really need to be a valid signature, as long as it has the right general form.
-            var input = new TransactionInput(Params, t, Script.CreateInputScript(_emptyBytes, _emptyBytes));
+            var input = new TransactionInput(Params, t, Script.CreateInputScript(EmptyBytes, EmptyBytes));
             // Importantly the outpoint hash cannot be zero as that's how we detect a coinbase transaction in isolation
             // but it must be unique to avoid 'different' transactions looking the same.
             var counter = new byte[32];

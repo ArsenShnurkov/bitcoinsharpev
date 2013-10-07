@@ -94,7 +94,6 @@ namespace BitCoinSharp
             var genesisBlock = new Block(n);
             var t = new Transaction(n);
             // A script containing the difficulty bits and the following message:
-            //
             //   "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks"
             var bytes = Hex.Decode("04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73");
             t.AddInput(new TransactionInput(n, t, bytes));
@@ -108,9 +107,9 @@ namespace BitCoinSharp
             return genesisBlock;
         }
 
-        private const int _targetTimespan = 14*24*60*60; // 2 weeks per difficulty cycle, on average.
-        private const int _targetSpacing = 10*60; // 10 minutes per block.
-        private const int _interval = _targetTimespan/_targetSpacing;
+        private const int TargetTimespanConst = 14*24*60*60; // 2 weeks per difficulty cycle, on average.
+        private const int TargetSpacingConst = 10*60; // 10 minutes per block.
+        private const int IntervalConst = TargetTimespanConst/TargetSpacingConst;
 
         /// <summary>
         /// Sets up the given NetworkParameters with testnet values.
@@ -124,8 +123,8 @@ namespace BitCoinSharp
             n.Port = 18333;
             n.AddressHeader = 111;
             n.DumpedPrivateKeyHeader = 239;
-            n.Interval = _interval;
-            n.TargetTimespan = _targetTimespan;
+            n.Interval = IntervalConst;
+            n.TargetTimespan = TargetTimespanConst;
             n.GenesisBlock = CreateGenesis(n);
             n.GenesisBlock.TimeSeconds = 1296688602;
             n.GenesisBlock.DifficultyTarget = 0x1d07fff8;
@@ -140,8 +139,7 @@ namespace BitCoinSharp
         /// </summary>
         public static NetworkParameters TestNet()
         {
-            var n = new NetworkParameters();
-            return CreateTestNet(n);
+            return CreateTestNet(new NetworkParameters());
         }
 
         /// <summary>
@@ -149,14 +147,16 @@ namespace BitCoinSharp
         /// </summary>
         public static NetworkParameters ProdNet()
         {
-            var n = new NetworkParameters();
-            n.ProofOfWorkLimit = new BigInteger("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16);
-            n.Port = 8333;
-            n.PacketMagic = 0xf9beb4d9;
-            n.AddressHeader = 0;
-            n.DumpedPrivateKeyHeader = 128;
-            n.Interval = _interval;
-            n.TargetTimespan = _targetTimespan;
+            var n = new NetworkParameters
+                {
+                    ProofOfWorkLimit = new BigInteger("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16),
+                    Port = 8333,
+                    PacketMagic = 0xf9beb4d9,
+                    AddressHeader = 0,
+                    DumpedPrivateKeyHeader = 128,
+                    Interval = IntervalConst,
+                    TargetTimespan = TargetTimespanConst
+                };
             n.GenesisBlock = CreateGenesis(n);
             n.GenesisBlock.DifficultyTarget = 0x1d00ffff;
             n.GenesisBlock.TimeSeconds = 1231006505;
@@ -171,8 +171,7 @@ namespace BitCoinSharp
         /// </summary>
         public static NetworkParameters UnitTests()
         {
-            var n = new NetworkParameters();
-            n = CreateTestNet(n);
+            var n = CreateTestNet(new NetworkParameters());
             n.ProofOfWorkLimit = new BigInteger("00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", 16);
             n.GenesisBlock.DifficultyTarget = Block.EasiestDifficultyTarget;
             n.Interval = 10;

@@ -19,6 +19,7 @@
 #endregion
 
 using System;
+using System.Globalization;
 using System.Threading;
 
 #pragma warning disable 420
@@ -215,7 +216,7 @@ namespace BitCoinSharp.Threading.AtomicTypes
         /// </returns>
         public override String ToString()
         {
-            return _integerValue.ToString();
+            return _integerValue.ToString(CultureInfo.InvariantCulture);
         }
 
         /// <summary>

@@ -61,6 +61,7 @@
     <Compile Include="Discovery\DnsDiscovery.cs" />
     <Compile Include="Discovery\IPeerDiscovery.cs" />
     <Compile Include="Discovery\IrcDiscovery.cs" />
+    <Compile Include="Discovery\IrcDiscoveryEventArgs.cs" />
     <Compile Include="Discovery\PeerDiscoveryException.cs" />
     <Compile Include="Discovery\SeedPeers.cs" />
     <Compile Include="DownloadListener.cs" />
@@ -153,6 +154,8 @@
     <Compile Include="VersionMessage.cs" />
     <Compile Include="VersionedChecksummedBytes.cs" />
     <Compile Include="Wallet.cs" />
+    <Compile Include="WalletCoinsReceivedEventArgs.cs" />
+    <Compile Include="WalletDeadTransactionEventArgs.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
