@@ -403,9 +403,7 @@ namespace BitCoinSharp
                 Debug.Assert(key != null, "Transaction exists in wallet that we cannot redeem: " + Utils.BytesToHexString(connectedPubKeyHash));
                 // Keep the key around for the script creation step below.
                 signingKeys[i] = key;
-                // The anyoneCanPay feature isn't used at the moment.
-                const bool anyoneCanPay = false;
-                var hash = HashTransactionForSignature(hashType, anyoneCanPay);
+                var hash = HashTransactionForSignature(hashType, false);
                 // Set the script to empty again for the next input.
                 input.ScriptBytes = TransactionInput.EmptyArray;
 
@@ -414,7 +412,7 @@ namespace BitCoinSharp
                 using (var bos = new MemoryStream())
                 {
                     bos.Write(key.Sign(hash));
-                    bos.Write((byte) (((int) hashType + 1) | (anyoneCanPay ? 0x80 : 0)));
+                    bos.Write((byte) ((int) hashType + 1));
                     signatures[i] = bos.ToArray();
                 }
             }

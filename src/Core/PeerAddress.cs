@@ -15,6 +15,7 @@
  */
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using BitCoinSharp.Common;
@@ -33,7 +34,7 @@ namespace BitCoinSharp
         internal IPAddress Addr { get; private set; }
         internal int Port { get; private set; }
         private ulong _services;
-        private uint _time;
+        private uint _time; // used during serialization?
 
         /// <summary>
         /// Construct a peer address from a serialized payload.
@@ -106,6 +107,7 @@ namespace BitCoinSharp
                 _time = ReadUint32();
             else
                 _time = uint.MaxValue;
+			Debug.Assert(_time != 0);
             _services = ReadUint64();
             var addrBytes = ReadBytes(16);
             if (new BigInteger(addrBytes, 0, 12).Equals(BigInteger.ValueOf(0xFFFF)))

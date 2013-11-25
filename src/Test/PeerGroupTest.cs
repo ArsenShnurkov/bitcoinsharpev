@@ -35,6 +35,7 @@ namespace BitCoinSharp.Test
             _blockStore = new MemoryBlockStore(_params);
             var chain = new BlockChain(_params, _wallet, _blockStore);
             _peerGroup = new PeerGroup(_blockStore, _params, chain);
+			Debug.Assert(_peerGroup != null); 
         }
     }
 }
